@@ -665,7 +665,11 @@ const LOGO_SVG = `
 
 // ===== CHROME PWA STANDALONE INSTALL SUPPORT =====
 (function initNsrPwa() {
+    const isStandalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
     try {
+        if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+            navigator.serviceWorker.register("./sw.js").catch(() => {});
+        }
         const svgBlob = new Blob([LOGO_SVG], { type: "image/svg+xml;charset=utf-8" });
         const svgUrl = URL.createObjectURL(svgBlob);
         const img = new Image();
@@ -680,7 +684,8 @@ const LOGO_SVG = `
                 const manifest = {
                     name: "NEW SELVAM RADIOS & AK TRANSPORT",
                     short_name: "NSR & AK",
-                    start_url: location.href,
+                    start_url: location.href.split("#")[0],
+                    scope: "./",
                     display: "standalone",
                     background_color: "#0b1120",
                     theme_color: "#0b1120",
@@ -699,8 +704,15 @@ const LOGO_SVG = `
     } catch (e) {}
 
     window._pwaDeferredPrompt = null;
+    window.addEventListener("appinstalled", () => {
+        window._pwaDeferredPrompt = null;
+        const b = document.getElementById("nsr-pwa-install-btn");
+        if (b) b.remove();
+    });
+    if (isStandalone) return;
     window.addEventListener("beforeinstallprompt", (e) => {
         e.preventDefault();
+        if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true) return;
         window._pwaDeferredPrompt = e;
         if (!document.getElementById("nsr-pwa-install-btn")) {
             const btn = document.createElement("button");
@@ -1210,7 +1222,7 @@ window.CommonShare = {
             const bodyEl = $("universal-pdf-body");
             const clone = bodyEl.cloneNode(true);
             clone.querySelectorAll(".no-print").forEach(el => el.remove());
-            const targetW = (isA4Wide && wideMode) ? 920 : Math.max(360, bodyEl.offsetWidth || 400);
+            const targetW = wideMode ? (isA4Wide ? 920 : 680) : Math.max(360, bodyEl.offsetWidth || 400);
             const wrap = document.createElement("div");
             wrap.style.cssText = `position:fixed;left:0;top:0;width:${targetW}px;background:#ffffff;padding:12px;z-index:999999;pointer-events:none;opacity:1;`;
             wrap.appendChild(clone);
@@ -1355,23 +1367,33 @@ window.CommonShare = {
                     const pdf = new jsPDF(isA4Wide ? "l" : "p", "mm", "a4");
                     const pageW = pdf.internal.pageSize.getWidth() - 16;
                     const pageMaxH = pdf.internal.pageSize.getHeight() - 16;
-                    const pxPerMm = canvas.width / pageW;
-                    const slicePxH = Math.floor(pageMaxH * pxPerMm);
-                    let yOff = 0, pageIdx = 0;
-                    while (yOff < canvas.height) {
-                        const hPx = Math.min(slicePxH, canvas.height - yOff);
-                        const pageCanvas = document.createElement("canvas");
-                        pageCanvas.width = canvas.width;
-                        pageCanvas.height = hPx;
-                        const ctx = pageCanvas.getContext("2d");
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-                        ctx.drawImage(canvas, 0, yOff, canvas.width, hPx, 0, 0, canvas.width, hPx);
-                        const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
-                        if (pageIdx > 0) pdf.addPage();
-                        pdf.addImage(imgData, "JPEG", 8, 8, pageW, hPx / pxPerMm);
-                        yOff += hPx;
-                        pageIdx++;
+                    const naturalH = (canvas.height * pageW) / canvas.width;
+                    if (naturalH <= pageMaxH * 1.45) {
+                        const fitScale = Math.min(1, pageMaxH / naturalH);
+                        const drawW = pageW * fitScale;
+                        const drawH = naturalH * fitScale;
+                        const offsetX = 8 + (pageW - drawW) / 2;
+                        const imgData = canvas.toDataURL("image/jpeg", 0.92);
+                        pdf.addImage(imgData, "JPEG", offsetX, 8, drawW, drawH);
+                    } else {
+                        const pxPerMm = canvas.width / pageW;
+                        const slicePxH = Math.floor(pageMaxH * pxPerMm);
+                        let yOff = 0, pageIdx = 0;
+                        while (yOff < canvas.height) {
+                            const hPx = Math.min(slicePxH, canvas.height - yOff);
+                            const pageCanvas = document.createElement("canvas");
+                            pageCanvas.width = canvas.width;
+                            pageCanvas.height = hPx;
+                            const ctx = pageCanvas.getContext("2d");
+                            ctx.fillStyle = "#ffffff";
+                            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+                            ctx.drawImage(canvas, 0, yOff, canvas.width, hPx, 0, 0, canvas.width, hPx);
+                            const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
+                            if (pageIdx > 0) pdf.addPage();
+                            pdf.addImage(imgData, "JPEG", 8, 8, pageW, hPx / pxPerMm);
+                            yOff += hPx;
+                            pageIdx++;
+                        }
                     }
                     const pdfBlob = pdf.output("blob");
                     const pdfName = cleanName + ".pdf";
