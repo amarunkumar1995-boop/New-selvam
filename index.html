@@ -3375,7 +3375,7 @@ function normalizeDB(o) {
             name: String(w.name || ""), phone: String(w.phone || ""), role: String(w.role || "worker"),
             salt: String(w.salt || ""), alg: String(w.alg || "fallback"), pinHash: String(w.pinHash || ""), photo: String(w.photo || ""),
             ...Object.fromEntries(["bloodGroup", "empId", "emergencyContact", "birthday", "anniversary", "address", "upiId", "instagram", "licenseExpiry"].filter(k => w[k]).map(k => [k, String(w[k])])),
-            perms: (w.perms && typeof w.perms === "object") ? { akAccess: !!w.perms.akAccess, viewMoney: !!w.perms.viewMoney, directSave: !!w.perms.directSave } : { akAccess: false, viewMoney: false, directSave: false }
+            perms: (w.perms && typeof w.perms === "object") ? { akAccess: !!w.perms.akAccess, viewMoney: !!w.perms.viewMoney, directSave: !!w.perms.directSave, kuttyAccess: !!w.perms.kuttyAccess } : { akAccess: false, viewMoney: false, directSave: false, kuttyAccess: false }
         })),
         loginHistory: arr(o.loginHistory).slice(0, 20),
         assignments: arr(o.assignments).map(x => ({
@@ -11727,7 +11727,7 @@ window.addWorker = async function () {
     const db = loadDB();
     if (db.workers.some(w => w.phone === phone)) return showToast("இந்த போன் எண் ஏற்கனவே உள்ளது!");
     const salt = randomSalt(), alg = bestAlg(), pinHash = await hashSecret(pin, salt, alg);
-    db.workers.push({ id: uid("w"), name, phone, role, salt, alg, pinHash, perms: { akAccess: false, viewMoney: false, directSave: false } });
+    db.workers.push({ id: uid("w"), name, phone, role, salt, alg, pinHash, perms: { akAccess: false, viewMoney: false, directSave: false, kuttyAccess: false } });
     logAct(db, "புதிய Worker", name + " (" + role + ")");
     saveDB(db); showToast("✅ Worker சேர்க்கப்பட்டார்!"); renderSecurityExtra(); refresh();
 };
