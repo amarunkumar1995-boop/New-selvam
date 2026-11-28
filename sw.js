@@ -1,22 +1,50 @@
-// NSR & AK Transport Service Worker (v1)
-const CACHE_NAME = "nsr-ak-pwa-v1";
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
+const CACHE_NAME = 'nsr-ak-pwa-v8';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
 });
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
 });
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-  event.respondWith(
-    fetch(event.request)
-      .then((res) => {
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = req.url || '';
+  if (url.includes('script.google.com') || url.includes('googleapis.com/macros')) return;
+
+  if (req.mode === 'navigate' || url.endsWith('.html') || url.endsWith('/')) {
+    event.respondWith(
+      fetch(req).then(res => {
         const copy = res.clone();
-        caches.open(CACHE_NAME).then((c) => c.put(event.request, copy)).catch(() => {});
+        caches.open(CACHE_NAME).then(c => c.put(req, copy));
         return res;
-      })
-      .catch(() => caches.match(event.request))
+      }).catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(req).then(cached => cached || fetch(req).then(res => {
+      if (res && res.status === 200 && url.startsWith(self.location.origin)) {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => cached))
   );
 });
